@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تقارير السنتر</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: Tahoma, sans-serif; background: #f4f7f6; padding: 20px; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h2 { color: #1a73e8; border-bottom: 2px solid #1a73e8; padding-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: right; }
+        th { background: #f2f2f2; }
+        .btn { display: inline-block; padding: 10px 15px; background: #1a73e8; color: white; text-decoration: none; border-radius: 5px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <a href="index.html" class="btn">⬅ العودة للمسح</a>
+        <h2>تقرير حضور وغياب المجموعات</h2>
+        <div id="attendance-report">جاري تحميل البيانات...</div>
+
+        <h2>تقرير درجات الامتحانات</h2>
+        <div id="exams-report">جاري تحميل البيانات...</div>
+    </div>
+
+    <script>
+        // حط بيانات Supabase بتاعتك هنا زي ما عملت في index.html
+        const SUPABASE_URL = 'https://rhvqwqlceskxfmimycff.supabase.co'; 
+        const SUPABASE_KEY = 'sb_publishable_NMH3fk1qPBypFpji_aryxA_WTfePxTL';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        async function loadReports() {
+            // ----------------------------------------------------
+            // 1. تقرير الحضور والغياب
+            // هنحتاج نجيب الطلاب، والـ attendance_log بتاع النهاردة
+            // ----------------------------------------------------
+            const today = new Date().toISOString().split('T')[0]; // تاريخ النهاردة YYYY-MM-DD
+
+            // جلب كل الطلاب
+            const { data: students } = await supabaseClient.from('students').select('*');
+            
+            // جلب حضور النهاردة
+            const { data: attendance } = await supabaseClient
+                .from('attendance_log')
+                .select('student_id')
+                .gte('scan_time', today + 'T00:00:00')
+                .lte('scan_time', today + 'T23:59:59');
+
+            const presentIds = attendance.map(a => a.student_id);
+
+            let attHtml = `<table><tr><th>اسم الطالب</th><th>حالة الحضور اليوم</th></tr>`;
+            students.forEach(student => {
+                const isPresent = presentIds.includes(student.id);
+                attHtml += `<tr>
+                    <td>${student.name}</td>
+                    <td style="color:${isPresent ? 'green' : 'red'}; font-weight:bold;">
+                        ${isPresent ? 'حاضر ✅' : 'غائب ❌'}
+                    </td>
+                </tr>`;
+            });
+            attHtml += `</table>`;
+            document.getElementById('attendance-report').innerHTML = attHtml;
+
+            // ----------------------------------------------------
+            // 2. تقرير الدرجات
+            // ----------------------------------------------------
+            // بنجيب النتائج ومعاها اسم الامتحان واسم الطالب
+            // (في Supabase لازم نعمل join صريح)
+            const { data: results, error } = await supabaseClient
+                .from('exam_results')
+                .select(`
+                    score,
+                    students ( name ),
+                    exams ( title, max_score )
+                `);
+
+            if (results && results.length > 0) {
+                let examHtml = `<table><tr><th>الطالب</th><th>الامتحان</th><th>الدرجة</th></tr>`;
+                results.forEach(r => {
+                    examHtml += `<tr>
+                        <td>${r.students.name}</td>
+                        <td>${r.exams.title}</td>
+                        <td><strong>${r.score}</strong> / ${r.exams.max_score}</td>
+                    </tr>`;
+                });
+                examHtml += `</table>`;
+                document.getElementById('exams-report').innerHTML = examHtml;
+            } else {
+                document.getElementById('exams-report').innerHTML = '<p>لا توجد درجات مسجلة حتى الآن.</p>';
+            }
+        }
+
+        // تشغيل الدالة عند فتح الصفحة
+        loadReports();
+    </script>
+</body>
+</html>

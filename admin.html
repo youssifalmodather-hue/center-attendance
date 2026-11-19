@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم السنتر</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: Tahoma, sans-serif; background: #f4f7f6; padding: 20px; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h2 { color: #1a73e8; border-bottom: 2px solid #1a73e8; padding-bottom: 10px; }
+        .nav { display: flex; gap: 10px; margin-bottom: 20px; }
+        .nav button { padding: 10px 20px; border: none; background: #e0e0e0; cursor: pointer; border-radius: 5px; font-weight: bold; }
+        .nav button.active { background: #1a73e8; color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        input, select { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        button.submit-btn { width: 100%; padding: 12px; background: #4caf50; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; margin-top: 10px; }
+        .alert { padding: 10px; margin-top: 10px; border-radius: 5px; display: none; }
+        .alert.success { background: #d4edda; color: #155724; display: block; }
+        .alert.error { background: #f8d7da; color: #721c24; display: block; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <a href="reports.html" style="display:inline-block; margin-bottom: 20px; text-decoration:none; color:#1a73e8;">⬅ العودة للتقارير</a>
+        <h2>لوحة تحكم الإدارة</h2>
+        
+        <div class="nav">
+            <button class="active" onclick="showTab('studentTab', this)">إضافة طالب</button>
+            <button onclick="showTab('groupTab', this)">إضافة مجموعة</button>
+            <button onclick="showTab('examTab', this)">إضافة درجات</button>
+        </div>
+
+        <!-- 1. إضافة طالب -->
+        <div id="studentTab" class="tab-content active">
+            <input type="text" id="stuName" placeholder="اسم الطالب">
+            <input type="text" id="stuQR" placeholder="كود الباركود (مثال: STU003)">
+            <input type="text" id="stuPhone" placeholder="رقم واتساب ولي الأمر (مثال: 201012345678)">
+            <select id="stuGroup">
+                <option value="">اختر المجموعة...</option>
+            </select>
+            <button class="submit-btn" onclick="addStudent()">إضافة الطالب</button>
+            <div id="msg-student" class="alert"></div>
+        </div>
+
+        <!-- 2. إضافة مجموعة -->
+        <div id="groupTab" class="tab-content">
+            <input type="text" id="groupName" placeholder="اسم المجموعة (مثال: مجموعة السبت)">
+            <button class="submit-btn" onclick="addGroup()">إضافة المجموعة</button>
+            <div id="msg-group" class="alert"></div>
+        </div>
+
+        <!-- 3. إضافة درجات -->
+        <div id="examTab" class="tab-content">
+            <select id="examStudent">
+                <option value="">اختر الطالب...</option>
+            </select>
+            <select id="examSelect">
+                <option value="">اختر الامتحان...</option>
+            </select>
+            <input type="number" id="examScore" placeholder="الدرجة">
+            <button class="submit-btn" onclick="addScore()">تسجيل الدرجة</button>
+            <div id="msg-exam" class="alert"></div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://rhvqwqlceskxfmimycff.supabase.co'; 
+        const SUPABASE_KEY = 'sb_publishable_NMH3fk1qPBypFpji_aryxA_WTfePxTL';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // التبديل بين التبويبات
+        function showTab(tabId, btn) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            btn.classList.add('active');
+        }
+
+        // دالة مساعدة لعرض الرسائل
+        function showMsg(id, text, isError = false) {
+            const el = document.getElementById(id);
+            el.className = 'alert ' + (isError ? 'error' : 'success');
+            el.innerText = text;
+            setTimeout(() => el.style.display = 'none', 3000);
+            el.style.display = 'block';
+        }
+
+        // 1. إضافة طالب
+        async function addStudent() {
+            const name = document.getElementById('stuName').value;
+            const qr = document.getElementById('stuQR').value;
+            const phone = document.getElementById('stuPhone').value;
+            const groupId = document.getElementById('stuGroup').value;
+
+            if (!name || !qr) return showMsg('msg-student', 'الاسم والباركود مطلوبين', true);
+
+            const { error } = await supabaseClient.from('students').insert({
+                name, qr_code: qr, parent_phone: phone, group_id: groupId || null
+            });
+
+            if (error) return showMsg('msg-student', 'خطأ: ' + error.message, true);
+            
+            showMsg('msg-student', 'تم إضافة الطالب بنجاح!');
+            document.getElementById('stuName').value = '';
+            document.getElementById('stuQR').value = '';
+            document.getElementById('stuPhone').value = '';
+        }
+
+        // 2. إضافة مجموعة
+        async function addGroup() {
+            const name = document.getElementById('groupName').value;
+            if (!name) return showMsg('msg-group', 'اسم المجموعة مطلوب', true);
+
+            const { error } = await supabaseClient.from('groups').insert({ name });
+
+            if (error) return showMsg('msg-group', 'خطأ: ' + error.message, true);
+            
+            showMsg('msg-group', 'تم إضافة المجموعة بنجاح!');
+            document.getElementById('groupName').value = '';
+            loadDropdowns(); // تحديث القوائم المنسدلة
+        }
+
+        // 3. إضافة درجة
+        async function addScore() {
+            const studentId = document.getElementById('examStudent').value;
+            const examId = document.getElementById('examSelect').value;
+            const score = document.getElementById('examScore').value;
+
+            if (!studentId || !examId || !score) return showMsg('msg-exam', 'كل البيانات مطلوبة', true);
+
+            // بنستخدم upsert عشان لو الطالب عنده درجة قديمة، تتحدث
+            const { error } = await supabaseClient.from('exam_results').upsert({
+                student_id: studentId, exam_id: examId, score: score
+            }, { onConflict: 'exam_id,student_id' });
+
+            if (error) return showMsg('msg-exam', 'خطأ: ' + error.message, true);
+            
+            showMsg('msg-exam', 'تم تسجيل الدرجة بنجاح!');
+            document.getElementById('examScore').value = '';
+        }
+
+        // تحميل القوائم المنسدلة (المجموعات، الطلاب، الامتحانات)
+        async function loadDropdowns() {
+            // جلب المجموعات
+            const { data: groups } = await supabaseClient.from('groups').select('*');
+            const groupSelect = document.getElementById('stuGroup');
+            groupSelect.innerHTML = '<option value="">اختر المجموعة...</option>';
+            groups?.forEach(g => groupSelect.innerHTML += `<option value="${g.id}">${g.name}</option>`);
+
+            // جلب الطلاب
+            const { data: students } = await supabaseClient.from('students').select('*');
+            const stuSelect = document.getElementById('examStudent');
+            stuSelect.innerHTML = '<option value="">اختر الطالب...</option>';
+            students?.forEach(s => stuSelect.innerHTML += `<option value="${s.id}">${s.name}</option>`);
+
+            // جلب الامتحانات
+            const { data: exams } = await supabaseClient.from('exams').select('*');
+            const examSelect = document.getElementById('examSelect');
+            examSelect.innerHTML = '<option value="">اختر الامتحان...</option>';
+            exams?.forEach(e => examSelect.innerHTML += `<option value="${e.id}">${e.title} (من ${e.max_score})</option>`);
+        }
+
+        // تشغيل تحميل القوائم عند فتح الصفحة
+        loadDropdowns();
+    </script>
+</body>
+</html>
