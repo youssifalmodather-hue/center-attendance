@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تسجيل طالب</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style> 
+        body { font-family: 'Cairo', sans-serif; background-color: #f3f4f6; padding-bottom: 30px; } 
+        #qrcode img { margin: 0 auto; border: 6px solid #1e293b; border-radius: 12px; padding: 8px; background: white; }
+    </style>
+</head>
+<body class="min-h-screen p-4">
+    <div class="max-w-lg mx-auto mt-4 bg-white rounded-3xl shadow-xl p-6">
+        <div class="text-center mb-6">
+            <h1 id="pageTitle" class="text-2xl font-extrabold text-gray-800">تسجيل طالب جديد</h1>
+            <p id="pageSubtitle" class="text-gray-500 text-sm">أدخل البيانات لتوليد كود الحضور</p>
+        </div>
+
+        <div id="formSection" class="space-y-4">
+            <input type="hidden" id="studentId">
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">اسم الطالب</label>
+                <input type="text" id="stuName" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3" placeholder="مثال: أحمد محمد">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">رقم واتساب ولي الأمر</label>
+                <input type="text" id="stuPhone" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3" placeholder="201012345678">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">المجموعة</label>
+                <select id="stuGroup" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3"></select>
+            </div>
+            
+            <button onclick="saveStudent()" id="saveBtn" class="w-full text-white bg-blue-600 hover:bg-blue-700 font-bold rounded-xl py-3 mt-4 shadow-lg shadow-blue-500/30">
+                حفظ الطالب وتوليد QR
+            </button>
+        </div>
+
+        <div id="successSection" class="hidden text-center mt-4">
+            <div class="bg-green-50 border border-green-200 rounded-2xl p-6">
+                <svg class="w-16 h-16 text-green-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <h2 class="text-xl font-bold text-green-700 mb-1">تم حفظ الطالب!</h2>
+                <p class="text-gray-600 mb-4 text-sm">كود الحضور للطالب <strong id="savedName" class="text-gray-900"></strong></p>
+                
+                <div class="bg-white inline-block p-3 rounded-xl shadow-sm mb-4" id="qrcode"></div>
+                
+                <div class="flex flex-col gap-2">
+                    <button onclick="window.print()" class="bg-gray-800 text-white font-bold py-2.5 rounded-xl">طباعة الكارت 🖨️</button>
+                    <a href="groups.html" class="bg-blue-600 text-white font-bold py-2.5 rounded-xl">العودة للمجموعات</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://rhvqwqlceskxfmimycff.supabase.co'; 
+        const SUPABASE_KEY = 'sb_publishable_NMH3fk1qPBypFpji_aryxA_WTfePxTL';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const editId = urlParams.get('id');
+
+        supabaseClient.auth.getSession().then(async ({ data: { session } }) => {
+            if (!session) window.location.href = 'login.html';
+            else {
+                await loadGroups();
+                if (editId) await loadStudentData(editId);
+            }
+        });
+
+        async function loadGroups() {
+            const { data: groups } = await supabaseClient.from('groups').select('*');
+            const select = document.getElementById('stuGroup');
+            select.innerHTML = '<option value="">بدون مجموعة</option>';
+            groups?.forEach(g => select.innerHTML += `<option value="${g.id}">${g.name}</option>`);
+        }
+
+        async function loadStudentData(id) {
+            document.getElementById('pageTitle').innerText = 'تعديل بيانات الطالب';
+            document.getElementById('pageSubtitle').innerText = 'قم بتحديث البيانات';
+            document.getElementById('saveBtn').innerText = 'حفظ التعديلات';
+            document.getElementById('studentId').value = id;
+
+            const { data: student } = await supabaseClient.from('students').select('*').eq('id', id).single();
+            if (student) {
+                document.getElementById('stuName').value = student.name;
+                document.getElementById('stuPhone').value = student.parent_phone || '';
+                document.getElementById('stuGroup').value = student.group_id || '';
+            }
+        }
+
+        function generateQR() {
+            const randomStr = Math.random().toString(36).substring(2, 10).toUpperCase();
+            return 'STU-' + randomStr;
+        }
+
+        async function saveStudent() {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            const name = document.getElementById('stuName').value;
+            const phone = document.getElementById('stuPhone').value;
+            const groupId = document.getElementById('stuGroup').value;
+            const btn = document.getElementById('saveBtn');
+
+            if (!name) return alert('الاسم مطلوب');
+            btn.innerText = 'جاري الحفظ...'; btn.disabled = true;
+
+            if (editId) {
+                // تعديل
+                const { error } = await supabaseClient.from('students').update({
+                    name, parent_phone: phone, group_id: groupId || null
+                }).eq('id', editId);
+
+                if (error) { alert('خطأ: ' + error.message); btn.innerText = 'حفظ التعديلات'; btn.disabled = false; } 
+                else { alert('تم التعديل بنجاح'); window.location.href = 'groups.html'; }
+            } else {
+                // إضافة جديدة
+                const qr = generateQR();
+                const { error } = await supabaseClient.from('students').insert({ 
+                    name, qr_code: qr, parent_phone: phone, group_id: groupId || null, user_id: session.user.id 
+                });
+
+                if (error) { alert('خطأ: ' + error.message); btn.innerText = 'حفظ الطالب'; btn.disabled = false; } 
+                else {
+                    document.getElementById('formSection').classList.add('hidden');
+                    document.getElementById('successSection').classList.remove('hidden');
+                    document.getElementById('savedName').innerText = name;
+                    document.getElementById('qrcode').innerHTML = "";
+                    new QRCode(document.getElementById("qrcode"), {
+                        text: qr, width: 180, height: 180, colorDark : "#000000", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+</html>
