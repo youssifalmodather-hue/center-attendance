@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>تسجيل الحضور</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: 'Cairo', sans-serif; background-color: #f3f4f6; padding-bottom: 85px; }
+        #reader { border-radius: 1.5rem; overflow: hidden; border: 4px solid #3b82f6; box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.2); }
+        #reader__dashboard_section_csr button { display: none !important; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden mb-6">
+        <div class="bg-gradient-to-r from-blue-600 to-blue-800 p-5 text-center"><h1 class="text-white text-xl font-extrabold">تسجيل الحضور بالكاميرا</h1></div>
+        <div class="p-5">
+            <div id="reader" class="w-full mb-4"></div>
+            <div id="result" class="hidden text-center p-4 rounded-xl mt-4 shadow-sm"></div>
+        </div>
+    </div>
+
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
+        <div class="max-w-md mx-auto flex justify-around">
+            <a href="index.html" class="flex flex-col items-center py-3 text-gray-500 hover:text-blue-600">
+                <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                <span class="text-xs">الرئيسية</span>
+            </a>
+            <a href="scan.html" class="flex flex-col items-center py-3 text-blue-600 font-bold">
+                <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                <span class="text-xs">المسح</span>
+            </a>
+            <a href="groups.html" class="flex flex-col items-center py-3 text-gray-500 hover:text-blue-600">
+                <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                <span class="text-xs">المجموعات</span>
+            </a>
+        </div>
+    </nav>
+
+    <script>
+        const SUPABASE_URL = 'https://rhvqwqlceskxfmimycff.supabase.co'; 
+        const SUPABASE_KEY = 'sb_publishable_NMH3fk1qPBypFpji_aryxA_WTfePxTL';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        supabaseClient.auth.getSession().then(({ data: { session } }) => { if (!session) window.location.href = 'login.html'; });
+
+        const resultDiv = document.getElementById('result');
+        let isProcessing = false;
+
+        function onScanSuccess(decodedText) {
+            if (isProcessing) return;
+            isProcessing = true;
+            html5QrcodeScanner.pause(true);
+            resultDiv.className = "text-center p-4 rounded-xl mt-4 bg-blue-50 text-blue-700 animate-pulse";
+            resultDiv.innerHTML = `<p class="font-bold">جاري التحقق...</p>`;
+            resultDiv.classList.remove('hidden');
+            processAttendance(decodedText);
+        }
+
+        const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
+        html5QrcodeScanner.render(onScanSuccess);
+
+        async function processAttendance(qrCode) {
+            try {
+                const { data, error } = await supabaseClient.rpc('scan_attendance', { p_qr: qrCode });
+                if (error) throw new Error("خطأ في الاتصال");
+                if (data.status === 'ok') { showSuccess(data); } else { showError(data.message); }
+            } catch (err) { showError("فشل الاتصال بالسيرفر"); } 
+            finally { setTimeout(() => { html5QrcodeScanner.resume(); isProcessing = false; }, 4000); }
+        }
+
+        function showSuccess(data) {
+            const feeText = data.fee_status === 'paid' ? 'مدفوع ✅' : 'غير مدفوع ❌';
+            const feeColor = data.fee_status === 'paid' ? 'text-green-600' : 'text-red-600';
+            const phone = data.parent_phone ? data.parent_phone.replace(/\D/g, '') : '';
+            const whatsappText = encodeURIComponent(`عزيزي ولي الأمر،\nتم تسجيل حضور الطالب: ${data.name}.\nالحصص المتبقية: ${data.remaining}\nحالة الاشتراك: ${feeText}`);
+            
+            let html = `
+                <div class="bg-green-50 border border-green-200 rounded-xl p-4 text-right">
+                    <h3 class="text-green-700 font-extrabold text-lg mb-3">✅ تم تسجيل الحضور</h3>
+                    <p class="flex justify-between border-b pb-1 mb-2"><span>الطالب:</span> <strong class="text-gray-900">${data.name}</strong></p>
+                    <p class="flex justify-between border-b pb-1 mb-2"><span>الحصص المتبقية:</span> <strong class="text-blue-600 text-lg">${data.remaining}</strong></p>
+                    <p class="flex justify-between"><span>الرسوم:</span> <strong class="${feeColor}">${feeText}</strong></p>
+            `;
+            if (phone) {
+                html += `<a href="https://wa.me/${phone}?text=${whatsappText}" target="_blank" class="mt-4 flex items-center justify-center w-full bg-[#25D366] hover:bg-[#1ebe57] text-white font-bold py-2.5 rounded-lg">إرسال تقرير واتساب</a>`;
+            }
+            html += `</div>`;
+            resultDiv.innerHTML = html;
+            resultDiv.className = "mt-4";
+        }
+
+        function showError(message) {
+            resultDiv.innerHTML = `<div class="bg-red-50 border border-red-200 rounded-xl p-4 text-center"><h3 class="text-red-700 font-bold text-lg">⚠️ تنبيه</h3><p class="text-red-600 mt-1">${message}</p></div>`;
+            resultDiv.className = "mt-4";
+        }
+    </script>
+</body>
+</html>
