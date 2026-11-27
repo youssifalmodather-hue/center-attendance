@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إدارة الامتحانات</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style> body { font-family: 'Cairo', sans-serif; background-color: #f3f4f6; padding-bottom: 85px; } </style>
+</head>
+<body class="min-h-screen p-4">
+    <div class="max-w-4xl mx-auto mt-4">
+        <div class="bg-white p-4 rounded-2xl shadow-sm mb-6 flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-extrabold text-gray-800">الامتحانات</h1>
+                <p class="text-gray-500 text-sm">إضافة وتعديل الدرجات</p>
+            </div>
+            <select id="examSelector" class="bg-gray-50 border border-gray-200 rounded-xl p-2 text-sm font-bold" onchange="loadExamData()">
+                <option value="">اختر امتحان...</option>
+                <option value="new">+ إنشاء امتحان جديد</option>
+            </select>
+        </div>
+
+        <div id="createExamSection" class="hidden bg-white rounded-2xl shadow-sm p-4 mb-6">
+            <h2 class="text-lg font-bold mb-3">امتحان جديد</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                <input type="text" id="examTitle" placeholder="عنوان الامتحان" class="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm">
+                <input type="number" id="examMax" value="50" placeholder="الدرجة النهائية" class="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm">
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-bold text-gray-700 mb-2">اختر المجموعات اللي هتمتحن:</label>
+                <div id="groupsCheckboxes" class="grid grid-cols-2 md:grid-cols-3 gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200"></div>
+            </div>
+            
+            <button onclick="createExam()" class="bg-purple-600 text-white px-6 py-2 rounded-lg font-bold text-sm w-full">إنشاء الامتحان</button>
+        </div>
+
+        <div id="scoresSection" class="hidden bg-white rounded-2xl shadow-sm p-4">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h2 id="examHeader" class="text-lg font-bold text-gray-800"></h2>
+                <button onclick="deleteExam()" class="text-red-600 bg-red-50 px-3 py-1 rounded-lg text-sm font-bold hover:bg-red-100 transition-colors">مسح الامتحان</button>
+            </div>
+            <div id="studentsScores" class="space-y-2"></div>
+            <button onclick="saveScores()" class="mt-4 bg-green-600 text-white px-6 py-2 rounded-lg font-bold text-sm w-full">حفظ / تعديل الدرجات</button>
+        </div>
+    </div>
+
+    <!-- شريط التنقل السفلي -->
+    <nav id="bottomNav" class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50 transition-transform duration-300">
+        <div class="max-w-md mx-auto flex justify-around">
+            <!-- زرار إخفاء/إظهار الشريط (ثابت في مكانه) -->
+<button onclick="toggleNav()" id="toggleNavBtn" class="fixed bottom-[80px] left-4 bg-gray-800 text-white p-2 rounded-full shadow-lg z-50 transition-all duration-300">
+    <svg id="toggleIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <!-- سهم لتحت (عشان يخفي) -->
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+    </svg>
+</button>
+            <a href="index.html" class="flex flex-col items-center py-3 text-gray-500 hover:text-blue-600">
+                <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                <span class="text-xs">الرئيسية</span>
+            </a>
+            <a href="all-students.html" class="flex flex-col items-center py-3 text-gray-500 hover:text-blue-600">
+                 <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                <span class="text-xs">كل الطلاب</span>
+            </a>
+        </div>
+    </nav>
+
+    <script>
+        const SUPABASE_URL = 'https://rhvqwqlceskxfmimycff.supabase.co'; 
+        const SUPABASE_KEY = 'sb_publishable_NMH3fk1qPBypFpji_aryxA_WTfePxTL';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        let currentExamId = null;
+        let currentStudents = [];
+        let allGroups = [];
+
+        supabaseClient.auth.getSession().then(({ data: { session } }) => {
+            if (!session) window.location.href = 'login.html';
+            else {
+                loadExamsDropdown();
+                loadGroupsForCheckboxes();
+            }
+        });
+
+        // 1. تحميل الامتحانات في القائمة
+        async function loadExamsDropdown() {
+            const { data: exams } = await supabaseClient.from('exams').select('id, title').order('id', { ascending: false });
+            const selector = document.getElementById('examSelector');
+            selector.innerHTML = '<option value="">اختر امتحان...</option><option value="new">+ إنشاء امتحان جديد</option>';
+            exams?.forEach(e => selector.innerHTML += `<option value="${e.id}">${e.title}</option>`);
+        }
+
+        // 2. تحميل المجموعات في الـ Checkboxes
+        async function loadGroupsForCheckboxes() {
+            const { data: groups } = await supabaseClient.from('groups').select('*');
+            allGroups = groups || [];
+            const container = document.getElementById('groupsCheckboxes');
+            
+            if (allGroups.length === 0) {
+                container.innerHTML = `<p class="text-sm text-gray-500">لا توجد مجموعات مضافة.</p>`;
+                return;
+            }
+
+            container.innerHTML = allGroups.map(g => `
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" value="${g.id}" class="group-checkbox w-4 h-4 text-purple-600 rounded focus:ring-purple-500">
+                    <span class="text-sm font-semibold text-gray-700">${g.name}</span>
+                </label>
+            `).join('');
+        }
+
+        function loadExamData() {
+            const val = document.getElementById('examSelector').value;
+            if (val === 'new') {
+                document.getElementById('createExamSection').classList.remove('hidden');
+                document.getElementById('scoresSection').classList.add('hidden');
+                // نصفير التشيك بوكس
+                document.querySelectorAll('.group-checkbox').forEach(cb => cb.checked = false);
+                document.getElementById('examTitle').value = '';
+            } else if (val) {
+                document.getElementById('createExamSection').classList.add('hidden');
+                document.getElementById('scoresSection').classList.remove('hidden');
+                fetchExamDetails(val);
+            } else {
+                document.getElementById('createExamSection').classList.add('hidden');
+                document.getElementById('scoresSection').classList.add('hidden');
+            }
+        }
+
+        // 3. إنشاء امتحان وربطه بأكتر من مجموعة
+        async function createExam() {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            const title = document.getElementById('examTitle').value;
+            const max = parseFloat(document.getElementById('examMax').value);
+            
+            // جلب المجموعات المختارة
+            const selectedGroups = Array.from(document.querySelectorAll('.group-checkbox:checked')).map(cb => cb.value);
+
+            if (!title) return alert('أدخل عنوان الامتحان');
+            if (selectedGroups.length === 0) return alert('اختر مجموعة واحدة على الأقل');
+
+            // 1. إنشاء الامتحان الأساسي
+            const { data: exam, error: examError } = await supabaseClient.from('exams').insert({
+                title, max_score: max, user_id: session.user.id
+            }).select().single();
+
+            if (examError) return alert('خطأ: ' + examError.message);
+
+            // 2. ربط الامتحان بالمجموعات
+            const examGroupsRecords = selectedGroups.map(groupId => ({
+                exam_id: exam.id,
+                group_id: parseInt(groupId),
+                user_id: session.user.id
+            }));
+
+            const { error: linkError } = await supabaseClient.from('exam_groups').insert(examGroupsRecords);
+            if (linkError) return alert('خطأ في ربط المجموعات: ' + linkError.message);
+            
+            alert('تم إنشاء الامتحان بنجاح');
+            window.location.reload();
+        }
+
+        // 4. جلب بيانات الامتحان وطلاب المجموعات
+        async function fetchExamDetails(examId) {
+            currentExamId = examId;
+            const { data: exam } = await supabaseClient.from('exams').select('*').eq('id', examId).single();
+            if (!exam) return;
+
+            // جلب المجموعات المرتبطة بالامتحان
+            const { data: examGroups } = await supabaseClient.from('exam_groups').select('group_id').eq('exam_id', examId);
+            const groupIds = examGroups?.map(eg => eg.group_id) || [];
+
+            if (groupIds.length === 0) {
+                document.getElementById('examHeader').innerText = `${exam.title} (لم يتم ربطه بأي مجموعة)`;
+                document.getElementById('studentsScores').innerHTML = `<p class="text-center text-gray-500 py-4">لا يوجد طلاب</p>`;
+                return;
+            }
+
+            document.getElementById('examHeader').innerText = `${exam.title} (من ${exam.max_score})`;
+
+            // جلب الطلاب اللي ينتموا للمجموعات دي
+            const { data: students } = await supabaseClient.from('students').select('id, name, groups(name)').in('group_id', groupIds);
+            currentStudents = students || [];
+
+            // جلب الدرجات المسجلة بالفعل
+            const { data: results } = await supabaseClient.from('exam_results').select('student_id, score').eq('exam_id', examId);
+            const resMap = {};
+            results?.forEach(r => resMap[r.student_id] = r.score);
+
+            // عرض الطلاب
+            const container = document.getElementById('studentsScores');
+            if (currentStudents.length === 0) {
+                container.innerHTML = `<p class="text-center text-gray-500 py-4">لا يوجد طلاب في هذه المجموعات</p>`;
+            } else {
+                container.innerHTML = currentStudents.map(s => `
+                    <div class="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                        <div class="flex-1">
+                            <span class="font-bold text-sm text-gray-800 block">${s.name}</span>
+                            <span class="text-xs text-gray-500">${s.groups?.name || ''}</span>
+                        </div>
+                        <input type="number" id="score_${s.id}" value="${resMap[s.id] || ''}" placeholder="الدرجة" max="${exam.max_score}" class="w-24 bg-white border border-gray-200 rounded-lg p-2 text-sm text-center font-bold">
+                    </div>
+                `).join('');
+            }
+        }
+
+        // 5. حفظ الدرجات
+        async function saveScores() {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            const records = [];
+
+            for (const s of currentStudents) {
+                const val = parseFloat(document.getElementById(`score_${s.id}`).value);
+                if (!isNaN(val)) {
+                    records.push({ exam_id: currentExamId, student_id: s.id, score: val, user_id: session.user.id });
+                }
+            }
+
+            if (records.length === 0) return alert('لم تدخل أي درجات');
+
+            const { error } = await supabaseClient.from('exam_results').upsert(records, { onConflict: 'exam_id, student_id' });
+            if (error) return alert('خطأ: ' + error.message);
+
+            alert('تم الحفظ بنجاح!');
+        }
+
+        // 6. مسح الامتحان
+        async function deleteExam() {
+            if (!confirm('هل أنت متأكد من مسح هذا الامتحان وكل درجاته؟')) return;
+            const { error } = await supabaseClient.from('exams').delete().eq('id', currentExamId);
+            if (error) return alert('خطأ: ' + error.message);
+            alert('تم مسح الامتحان');
+            window.location.reload();
+        }
+                function toggleNav() {
+            const nav = document.getElementById('bottomNav');
+            const icon = document.getElementById('toggleIcon');
+
+            if (nav.style.transform === 'translateY(100%)') {
+                // إظهار الشريط
+                nav.style.transform = 'translateY(0)';
+                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>'; // سهم لتحت
+            } else {
+                // إخفاء الشريط
+                nav.style.transform = 'translateY(100%)';
+                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>'; // سهم لفوق
+            }
+        }
+    </script>
+</body>
+</html>

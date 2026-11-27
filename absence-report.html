@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تقارير الغياب</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style> 
+        body { font-family: 'Cairo', sans-serif; background-color: #f3f4f6; padding-bottom: 85px; } 
+        .filter-btn.active { background-color: #2563eb; color: white; border-color: #2563eb; }
+    </style>
+</head>
+<body class="min-h-screen p-4">
+    <div class="max-w-4xl mx-auto mt-4">
+        
+        <!-- العنوان -->
+        <div class="bg-white p-4 rounded-2xl shadow-sm mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="text-center md:text-right">
+                <h1 class="text-2xl font-extrabold text-gray-800">تقارير الغياب</h1>
+                <p class="text-gray-500 text-sm">اختر طالب لعرض تفاصيل غيابه</p>
+            </div>
+        </div>
+
+        <!-- أزرار الفلترة -->
+        <div class="flex gap-2 mb-4 bg-white p-2 rounded-2xl shadow-sm overflow-x-auto no-print">
+            <button onclick="filterView('all', this)" class="filter-btn active flex-1 py-2 px-4 rounded-xl border border-transparent font-bold whitespace-nowrap transition-all">عرض الكل</button>
+            <button onclick="filterView('present', this)" class="filter-btn flex-1 py-2 px-4 rounded-xl border border-transparent font-bold whitespace-nowrap transition-all hover:bg-gray-100 text-green-600">الحاضرين فقط</button>
+            <button onclick="filterView('absent', this)" class="filter-btn flex-1 py-2 px-4 rounded-xl border border-transparent font-bold whitespace-nowrap transition-all hover:bg-gray-100 text-red-600">الغائبين فقط</button>
+        </div>
+
+        <!-- الجدول -->
+        <div class="bg-white rounded-3xl shadow-lg overflow-hidden">
+            <div class="p-0 overflow-x-auto">
+                <table class="w-full text-right text-sm text-gray-600">
+                    <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-4">الطالب</th>
+                            <th class="px-4 py-4">المجموعة</th>
+                            <th class="px-4 py-4">إجمالي الغياب</th>
+                            <th class="px-4 py-4">حالة اليوم</th>
+                            <th class="px-4 py-4 text-center">الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="absenceList"><tr><td colspan="5" class="text-center py-6 text-gray-400">جاري التحميل...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- شريط التنقل السفلي -->
+    <nav id="bottomNav" class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50 transition-transform duration-300">
+        <div class="max-w-md mx-auto flex justify-around">
+            <!-- زرار إخفاء/إظهار الشريط (ثابت في مكانه) -->
+<button onclick="toggleNav()" id="toggleNavBtn" class="fixed bottom-[80px] left-4 bg-gray-800 text-white p-2 rounded-full shadow-lg z-50 transition-all duration-300">
+    <svg id="toggleIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <!-- سهم لتحت (عشان يخفي) -->
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+    </svg>
+</button>
+            <a href="index.html" class="flex flex-col items-center py-3 text-gray-500 hover:text-blue-600">
+                <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                <span class="text-xs">الرئيسية</span>
+            </a>
+            <a href="all-students.html" class="flex flex-col items-center py-3 text-gray-500 hover:text-blue-600">
+                 <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                <span class="text-xs">كل الطلاب</span>
+            </a>
+            <a href="groups.html" class="flex flex-col items-center py-3 text-gray-500 hover:text-blue-600">
+                <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                <span class="text-xs">المجموعات</span>
+            </a>
+        </div>
+    </nav>
+
+    <script>
+        const SUPABASE_URL = 'https://rhvqwqlceskxfmimycff.supabase.co'; 
+        const SUPABASE_KEY = 'sb_publishable_NMH3fk1qPBypFpji_aryxA_WTfePxTL';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        let allStudentsData = []; // هنحفظ فيها بيانات الطلاب عشان نفلتر من غير ما نرجع للداتابيز تاني
+        let currentFilter = 'all'; // الفلتر الافتراضي
+
+        supabaseClient.auth.getSession().then(({ data: { session } }) => {
+            if (!session) window.location.href = 'login.html';
+            else loadAbsenceReport();
+        });
+
+        async function loadAbsenceReport() {
+            const today = new Date().toISOString().split('T')[0];
+            
+            // جلب الطلاب مع سجلات الحضور
+            const { data: students } = await supabaseClient.from('students')
+                .select(`id, name, groups(name), attendance_log(status, session_date)`)
+                .order('name');
+            
+            if (!students) {
+                document.getElementById('absenceList').innerHTML = `<tr><td colspan="5" class="text-center py-6 text-gray-500">لا يوجد طلاب</td></tr>`;
+                return;
+            }
+
+            // تجهيز البيانات
+            allStudentsData = students.map(s => {
+                // حساب عدد أيام الغياب الكلية
+                const absentDays = s.attendance_log?.filter(log => log.status === 'absent').length || 0;
+                
+                // حالة النهاردة
+                const todayLog = s.attendance_log?.find(log => log.session_date === today);
+                let todayStatus = 'not_logged'; // افتراضي
+                if (todayLog?.status === 'present') todayStatus = 'present';
+                else if (todayLog?.status === 'absent') todayStatus = 'absent';
+
+                return {
+                    id: s.id,
+                    name: s.name,
+                    groupName: s.groups?.name || 'بدون',
+                    absentDays: absentDays,
+                    todayStatus: todayStatus
+                };
+            });
+
+            renderTable(currentFilter);
+        }
+
+        // دالة عرض الجدول بناءً على الفلتر
+        function renderTable(filter) {
+            currentFilter = filter;
+            const tbody = document.getElementById('absenceList');
+            
+            // فلترة البيانات
+            let filteredData = allStudentsData;
+            if (filter === 'present') {
+                filteredData = allStudentsData.filter(s => s.todayStatus === 'present');
+            } else if (filter === 'absent') {
+                filteredData = allStudentsData.filter(s => s.todayStatus === 'absent' || s.todayStatus === 'not_logged');
+                // الغائبين هنا بيشملوا اللي مسجل غايب أو اللي لسه مسجلش (عشان تقدر تسجله غايب)
+            }
+
+            if (filteredData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-gray-500">لا يوجد طلاب مطابقين لهذا الفلتر</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filteredData.map(s => {
+                let statusBadge = '';
+                let actionBtn = '';
+
+                if (s.todayStatus === 'present') {
+                    statusBadge = `<span class="bg-green-100 text-green-700 px-2 py-1 rounded font-bold">حاضر ✅</span>`;
+                } else if (s.todayStatus === 'absent') {
+                    statusBadge = `<span class="bg-red-100 text-red-700 px-2 py-1 rounded font-bold">غايب ❌</span>`;
+                } else {
+                    statusBadge = `<span class="bg-gray-100 text-gray-600 px-2 py-1 rounded font-bold">لم يسجل</span>`;
+                    actionBtn = `<button onclick="markAbsent(${s.id})" class="bg-red-50 text-red-600 px-3 py-1.5 rounded-lg text-xs font-bold mb-1 w-full">تسجيل غياب</button>`;
+                }
+
+                return `<tr class="border-b hover:bg-gray-50">
+                    <td class="px-4 py-4 font-bold text-blue-600 hover:underline cursor-pointer" onclick="window.location.href='student-report.html?id=${s.id}'">${s.name}</td>
+                    <td class="px-4 py-4 text-gray-500">${s.groupName}</td>
+                    <td class="px-4 py-4"><span class="bg-red-50 text-red-700 px-2 py-1 rounded font-bold">${s.absentDays} يوم غياب</span></td>
+                    <td class="px-4 py-4">${statusBadge}</td>
+                    <td class="px-4 py-4 text-center">
+                        ${actionBtn}
+                        <a href="student-report.html?id=${s.id}" class="block mt-1 text-blue-600 text-xs font-bold hover:underline">عرض التفاصيل</a>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        // دالة تبديل الفلتر وتغيير شكل الزرار
+        function filterView(filter, btn) {
+            // شيل الكلاس النشط من كل الأزرار
+            document.querySelectorAll('.filter-btn').forEach(b => {
+                b.classList.remove('active', 'bg-blue-600', 'text-white');
+                b.classList.add('hover:bg-gray-100');
+            });
+            // ضيف الكلاس النشط للزرار اللي اتضغط
+            btn.classList.add('active', 'bg-blue-600', 'text-white');
+            btn.classList.remove('hover:bg-gray-100');
+            
+            // أعد رسم الجدول
+            renderTable(filter);
+        }
+
+        // دالة تسجيل الغياب اليدوي
+        async function markAbsent(studentId) {
+            if (!confirm('هل أنت متأكد من تسجيل غياب هذا الطالب اليوم؟')) return;
+            
+            const { data, error } = await supabaseClient.rpc('mark_absent', { p_student_id: studentId });
+            
+            if (error) return alert('خطأ: ' + error.message);
+            if (data.status === 'error') return alert(data.message);
+            
+            alert('تم تسجيل الغياب');
+            loadAbsenceReport(); // تحديث الجدول
+        }
+                function toggleNav() {
+            const nav = document.getElementById('bottomNav');
+            const icon = document.getElementById('toggleIcon');
+
+            if (nav.style.transform === 'translateY(100%)') {
+                // إظهار الشريط
+                nav.style.transform = 'translateY(0)';
+                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>'; // سهم لتحت
+            } else {
+                // إخفاء الشريط
+                nav.style.transform = 'translateY(100%)';
+                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>'; // سهم لفوق
+            }
+        }
+    </script>
+</body>
+</html>
